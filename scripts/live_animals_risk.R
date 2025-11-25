@@ -155,7 +155,7 @@ print_results <- print(print_results %>%
 saveRDS(simulation_array, "data/processed/simulation_live_animals_array.rds")
 
 #save results
-write.csv(print_results, "results/simulation_live_animals_results.csv", row.names = FALSE)
+write.csv(print_results, "results/live_animals_risk.csv", row.names = FALSE)
 
 
 
