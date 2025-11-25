@@ -41,7 +41,8 @@ imports <- imports %>%
 
 ## number of imported pigs
 imports <- imports %>% 
-  rename(ncP = `2023 - Quilograma Líquido`)
+  rename(ncP = `2023 - Quilograma Líquido`) %>% 
+  mutate(ncP = ncP / 1000)
 
 ## meat production stats
 imports <- imports %>% 
@@ -53,7 +54,7 @@ imports <- imports %>%
 ### simulation parameters ----
 n_sim <- 1000
 parameters <- c('P1','hp','ou','no','to','NI','alpha1','alpha2','P2L','P3','P4','pcL','prL',
-                'Pus','Psm','Pm','Mp','Nm','Qim','alpha1p','alpha2p','P2P','pcP','PRp')
+                'Pus','Psm','Pm','Mp','Nm','Qim','alpha1p','alpha2p','P2P','pcP')
 countries <- imports$M49
 
 ### function to generate simulation array ----
@@ -210,10 +211,10 @@ generate_array <- function(){
           shape1 = simulation_array[ as.character(countries), 'alpha1p', ], 
           shape2 = simulation_array[ as.character(countries), 'alpha2p', ])
   
-  # #PCP
-  # simulation_array[ as.character(countries), 'pcP', ] <- 
-  #   simulation_array[ as.character(countries), 'P1', ] *
-  #   simulation_array[ as.character(countries), 'P2P', ]
+  #PCP
+  simulation_array[ as.character(countries), 'pcP', ] <-
+    simulation_array[ as.character(countries), 'P1', ] *
+    simulation_array[ as.character(countries), 'P2P', ]
 
   return(simulation_array)
 }
@@ -225,17 +226,22 @@ X2 <- apply(generate_array(), 2, c)
 X1 <- as.data.frame(X1)
 X2 <- as.data.frame(X2)
 
+###  Sensitivity analysis with Sobol ----
+
 #prepare a Sensitivity analysis with Sobol
 # Define the model function
 model_function <- function(X) {
-  alpha1p <- X$Qim + 1
+  Pm <- X$P3 * X$P4 * X$Psm * X$Pus
+  Qim <- X$NI * Pm * X$Mp
+  alpha1p <- Qim + 1
   alpha2p <- X$Nm - alpha1p
+  P2P <- rbeta(n = 1, shape1 = alpha1p, shape2 = alpha2p)
   pcP <- X$P1 * X$P2P
   return(pcP)
 }
 
 # Perform Sobol sensitivity analysis
-sobol_result <- sobolmartinez(model = model_function, X1 = X1, X2 = X2, nboot = 100)
+sobol_result <- sobol2007(model = model_function, X1 = X1, X2 = X2, nboot = 100)
 #graphical representation
 ggplot(sobol_result)
 
@@ -275,7 +281,7 @@ ggplot(df_long, aes(x = reorder(param, valor), y = valor, fill = tipo)) +
   geom_col(position = "dodge") +
   coord_flip() +
   labs(x = "Parameter", y = "Sobol Indices", fill = "",
-       title = "Tornado plot for S and ST (live animals)") +
+       title = "Tornado plot for S and ST (products)") +
   theme_bw()
 # save plot in results
 ggsave("results/sobol_tornado_plot_products.png", width = 8, height = 6)
@@ -294,7 +300,8 @@ df <- as.data.frame.table(simulation_array, responseName = "value") %>%
   pivot_wider(names_from = parameter, values_from = value)
 
 #model
-model_lmer <- lmer(pcP ~  P2P + Qim + Nm + P4 + P3 + ou + to + hp + no + P1 + (1|country), data = df)
+model_lmer <- lmer(pcP ~  P2P + Qim + Nm + P4 + P3 + ou + to + hp + no + P1 +
+                     (1|country), data = df)
 summary(model_lmer)
 
 # Extract model output

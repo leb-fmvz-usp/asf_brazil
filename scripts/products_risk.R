@@ -38,9 +38,10 @@ imports$so <- imports$`Nb animals premises`
 imports <- imports %>% 
   left_join(pig_population_country)
 
-## number of imported pigs
+## number of imported tons of productss
 imports <- imports %>% 
-  rename(ncP = `2023 - Quilograma Líquido`)
+  rename(ncP = `2023 - Quilograma Líquido`) %>% 
+  mutate(ncP = ncP / 1000)
 
 ## meat production stats
 imports <- imports %>% 
@@ -243,6 +244,24 @@ write.csv(print_results_meat, "results/products_risk.csv", row.names = FALSE)
 #save simulation array
 saveRDS(simulation_array, "data/processed/simulation_products_array.rds")
 
+#analyze p2p for italy
+p2p_italy <- simulation_array[ as.character(380), 'P2P', ]
+hist(p2p_italy, breaks = 50, main = "P2P Italy", xlab = "P2P")
+#analyze pcp for italy
+pcp_italy <- simulation_array[ as.character(380), 'pcP', ]
+hist(pcp_italy, breaks = 50, main = "PcP Italy", xlab = "PcP")
+#analyze prp for italy
+prp_italy <- simulation_array[ as.character(380), 'PRp', ]
+hist(prp_italy, breaks = 50, main = "PRp Italy", xlab = "PRp")
+#analyze ncP from imports table
+hist(imports$ncP)
+#visualize ncp by country
+imports %>%
+  ggplot(aes(x = reorder(`Países`, -ncP), y = ncP)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Number of imported pigs by country",
+       x = "Country",
+       y = "Number of imported pigs")
 
-
-
+(1 - 1e-7)^(1e6)
