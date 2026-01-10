@@ -61,15 +61,10 @@ simulation_array[ as.character(countries), 'hp', ] <-
 simulation_array[ as.character(countries), 'ou', ] <- 
   rpert(n = n_sim*length(countries), 
         min = min(tabela_ou$Casos), 
-        mode = mean(tabela_ou$Casos),
-        max = max(tabela_ou$Casos))
-simulation_array[ as.character(countries), 'ou', ] <- 
-  rpert(n = n_sim*length(countries), 
-        min = min(tabela_ou$Casos), 
-        mode = 2,
-        max = 10)
-#ou <- rpert(n = 1, min = 1, mode = 1.28,max = 6) #Beatriz data
+        mode = 1, #mode of outbreaks, check with table(tabela_ou$Casos)
+        max = 231) #excluding extreme value of max outbreaks in Romenia
 
+# NO - Number of animals
 simulation_array[ as.character(countries), 'no', ] <- 
   rnorm(n = n_sim*length(countries), 
         mean = imports$mean_animals, 
@@ -109,7 +104,7 @@ simulation_array[ as.character(countries), 'P3', ] <-
 
 ## P4 
 simulation_array[ as.character(countries), 'P4', ] <- 
-  rpert(n = n_sim*length(countries), 
+  1 - rpert(n = n_sim*length(countries), 
         min=0.0005, 
         mode=0.0027, 
         max=0.092)

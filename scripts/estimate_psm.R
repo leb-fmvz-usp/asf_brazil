@@ -35,7 +35,9 @@ psm_table <- pigs_slaughter_2024 %>%
               select(geo, values) %>%
               rename(total_pigs = values),
             by = 'geo') %>%
-  mutate(prob_slaughter = slaughter_month / total_pigs) 
+  mutate(prob_slaughter = slaughter_month / total_pigs) %>% 
+  #remove rows that have "european union" in geo field
+  filter(!grepl("european union", geo, ignore.case = TRUE))
 
 # Calculate mean and standard deviation of slaughter probability
 psm_estimated <- psm_table %>%
@@ -52,6 +54,7 @@ hist(psm_table$prob_slaughter,
      xlim = c(0,0.25))
 
 # plot normal curve over histogram
+x_vals <- seq(0, 0.25, length.out = 100)
 curve_vals <- dnorm(x_vals, mean = psm_estimated$mean_prob, sd = psm_estimated$sd_prob)
 lines(x_vals, curve_vals, col = "blue", lwd = 2)
 
@@ -92,7 +95,10 @@ tons_per_pig_table <- pigmeat_2024 %>%
               select(geo, values) %>%
               rename(slaughter = values),
             by = 'geo') %>%
-  mutate(tons_per_pig = pigmeat_tons / slaughter)
+  mutate(tons_per_pig = pigmeat_tons / slaughter) %>% 
+  #remove rows that have "european union" in geo field
+  filter(!grepl("european union", geo, ignore.case = TRUE))
+
 # Calculate mean tons per pig
 tons_per_pig_estimated <- tons_per_pig_table %>%
   summarise(mean_tons_per_pig = mean(tons_per_pig, na.rm = TRUE),

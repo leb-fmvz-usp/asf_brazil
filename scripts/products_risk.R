@@ -21,7 +21,7 @@ pig_population_country <- read.csv("data/processed/pig_population_country.csv")
 # Function to generate truncated normal distribution
 truncnorm <- function(n, mean, sd, min, max) {
   q <- pnorm(c(min, max), mean = mean, sd = sd)
-  u <- runif(n, q[1], q[2])
+  u <- runif(n, min = q[1], max = q[2])
   return(qnorm(u, mean = mean, sd = sd))
 }
 
@@ -52,8 +52,9 @@ imports <- imports %>%
 
 ### simulation parameters ----
 n_sim <- 1000
-parameters <- c('P1','hp','ou','no','to','NI','alpha1','alpha2','P2L','P3','P4','pcL','prL',
-                'Pus','Psm','Pm','Mp','Nm','Qim','alpha1p','alpha2p','P2P','pcP','PRp')
+parameters <- c('P1','hp','ou','no','to','NI','P3','P4',
+                'Pus','Psm','Pm','Mp','Nm','Qim','alpha1p','alpha2p',
+                'P2P','pcP','prP')
 countries <- imports$M49
 
 
@@ -90,15 +91,10 @@ simulation_array[ as.character(countries), 'hp', ] <-
 simulation_array[ as.character(countries), 'ou', ] <- 
   rpert(n = n_sim*length(countries), 
         min = min(tabela_ou$Casos), 
-        mode = mean(tabela_ou$Casos),
-        max = max(tabela_ou$Casos))
-simulation_array[ as.character(countries), 'ou', ] <- 
-  rpert(n = n_sim*length(countries), 
-        min = min(tabela_ou$Casos), 
-        mode = 2,
-        max = 10)
-#ou <- rpert(n = 1, min = 1, mode = 1.28,max = 6) #Beatriz data
+        mode = 1, #mode of outbreaks, check with table(tabela_ou$Casos)
+        max = 231) #exclding extreme value of max outbreaks in Romenia
 
+# number of animals
 simulation_array[ as.character(countries), 'no', ] <- 
   rnorm(n = n_sim*length(countries), 
         mean = imports$mean_animals, 
@@ -114,38 +110,22 @@ simulation_array[ as.character(countries), 'NI', ] <-
   simulation_array[ as.character(countries), 'to', ] *
   simulation_array[ as.character(countries), 'hp', ]
 
-# Beta distribution for P2L Beta(α1, α2)
-#alpha1  = NI + 1
-simulation_array[ as.character(countries), 'alpha1', ] <- 
-  simulation_array[ as.character(countries), 'NI', ] + 1
-#alpha2 = no - (NI + 1)
-simulation_array[ as.character(countries), 'alpha2', ] <- 
-  simulation_array[ as.character(countries), 'no', ] - 
-  simulation_array[ as.character(countries), 'alpha1', ]
-
-#P2L
-simulation_array[ as.character(countries), 'P2L', ] <- 
-  rbeta(n = n_sim*length(countries), 
-        shape1 = simulation_array[ as.character(countries), 'alpha1', ], 
-        shape2 = simulation_array[ as.character(countries), 'alpha2', ])
-
-## P3 
+## P3 #chance of an infected pig survive the infection period
 simulation_array[ as.character(countries), 'P3', ] <- 
   rpert(n = n_sim*length(countries), 
         min = 0.206, 
         mode = 0.633, 
         max = 1)
 
-## P4 
+## P4 #chance of survival during transit
 simulation_array[ as.character(countries), 'P4', ] <- 
-  rpert(n = n_sim*length(countries), 
-        min=0.0005, 
-        mode=0.0027, 
-        max=0.092)
-
+  1 - rpert(n = n_sim*length(countries), 
+            min=0.0005, 
+            mode=0.0027, 
+            max=0.092)
 
 ## Pus (check needed) ##
-
+# Probability of an infected pig pass unreported slaughtering process
 simulation_array[ as.character(countries), 'Pus', ] <- 
   rbeta(n = n_sim*length(countries),
         shape1 = 1.34, 
@@ -199,7 +179,7 @@ simulation_array[ as.character(countries), 'alpha1p', ] <-
 #alpha2 = NM - (QIM + 1)
 simulation_array[ as.character(countries), 'alpha2p', ] <- 
   simulation_array[ as.character(countries), 'Nm', ] - 
-  simulation_array[ as.character(countries), 'alpha1', ]
+  simulation_array[ as.character(countries), 'alpha1p', ]
 
 #P2P
 simulation_array[ as.character(countries), 'P2P', ] <- 
@@ -214,30 +194,44 @@ simulation_array[ as.character(countries), 'pcP', ] <-
 
 #PRp
 # probability of release of at least one contaminated meat product
-simulation_array[ as.character(countries), 'PRp', ] <- 
+simulation_array[ as.character(countries), 'prP', ] <- 
   1 - (1 - simulation_array[ as.character(countries), 'pcP', ])^(imports$ncP)
 
 
-#PRp by country
-PRp_mean <- apply(FUN = mean, X = simulation_array[,'PRp',], MARGIN = 1)
-PRp_025 <- apply(FUN = quantile, X = simulation_array[,'PRp',], MARGIN = 1, probs = 0.025)
-PRp_975 <- apply(FUN = quantile, X = simulation_array[,'PRp',], MARGIN = 1, probs = 0.975)
-PRp <- data.frame(M49 = as.numeric(names(PRp_mean)), PRp_mean, PRp_025, PRp_975)
+#prP by country
+prP_mean <- apply(FUN = mean, X = simulation_array[,'prP',], MARGIN = 1)
+prP_025 <- apply(FUN = quantile, X = simulation_array[,'prP',], MARGIN = 1, probs = 0.025)
+prP_975 <- apply(FUN = quantile, X = simulation_array[,'prP',], MARGIN = 1, probs = 0.975)
+prP <- data.frame(M49 = as.numeric(names(prP_mean)), prP_mean, prP_025, prP_975)
 
 #merge results with imports table
 results_meat <- select(imports, M49, ISO3, `Países`) %>% 
-  left_join(PRp)
+  left_join(prP)
+
+#visualize Prp and its interval by country
+ggplot(results_meat, aes(x = reorder(`Países`, -prP_mean), y = prP_mean)) +
+  geom_point(stat = "identity", fill = "steelblue") +
+  geom_errorbar(aes(ymin = prP_025, ymax = prP_975), width = 0.2) +
+  coord_flip() +
+  labs(title = "Probability of release of at least one contaminated meat product by country",
+       x = "Country",
+       y = "Probability of release (prP)") +
+  theme_minimal()
+
 
 #probability of release of at least one contaminated meat product combining all countries
 print_results_meat <- results_meat %>%
   bind_rows(
     results_meat %>% 
-      summarise(across(PRp_mean:PRp_975, function(.x) {1 - prod( 1- .x)})) %>%
+      summarise(across(prP_mean:prP_975, function(.x) {1 - prod( 1- .x)})) %>%
       mutate(M49 = NA, ISO3 = '', `Países` = 'All')
   )
+
+#format results in scientific notation
 print_results_meat <- print(print_results_meat %>% 
-                              mutate(across(PRp_mean:PRp_975, 
+                              mutate(across(prP_mean:prP_975, 
                                             ~ formatC(.x, format = "e", digits = 2))))
+
 #save results
 write.csv(print_results_meat, "results/products_risk.csv", row.names = FALSE)
 
@@ -251,8 +245,8 @@ hist(p2p_italy, breaks = 50, main = "P2P Italy", xlab = "P2P")
 pcp_italy <- simulation_array[ as.character(380), 'pcP', ]
 hist(pcp_italy, breaks = 50, main = "PcP Italy", xlab = "PcP")
 #analyze prp for italy
-prp_italy <- simulation_array[ as.character(380), 'PRp', ]
-hist(prp_italy, breaks = 50, main = "PRp Italy", xlab = "PRp")
+prp_italy <- simulation_array[ as.character(380), 'prP', ]
+hist(prp_italy, breaks = 50, main = "PRp Italy", xlab = "prP")
 #analyze ncP from imports table
 hist(imports$ncP)
 #visualize ncp by country
@@ -263,5 +257,3 @@ imports %>%
   labs(title = "Number of imported pigs by country",
        x = "Country",
        y = "Number of imported pigs")
-
-(1 - 1e-7)^(1e6)
