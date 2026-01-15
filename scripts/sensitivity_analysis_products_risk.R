@@ -52,9 +52,9 @@ imports <- imports %>%
   )
 
 ### simulation parameters ----
-n_sim <- 1000
-parameters <- c('P1','hp','ou','no','to','NI','alpha1','alpha2','P2L','P3','P4','pcL','prL',
-                'Pus','Psm','Pm','Mp','Nm','Qim','alpha1p','alpha2p','P2P','pcP')
+n_sim <- 10000
+parameters <- c('P1','hp','ou','no','to','P3','P4',
+                'Pus','Psm','Mp','Nm')
 countries <- imports$M49
 
 ### function to generate simulation array ----
@@ -94,15 +94,10 @@ generate_array <- function(){
   simulation_array[ as.character(countries), 'ou', ] <- 
     rpert(n = n_sim*length(countries), 
           min = min(tabela_ou$Casos), 
-          mode = mean(tabela_ou$Casos),
-          max = max(tabela_ou$Casos))
-  simulation_array[ as.character(countries), 'ou', ] <- 
-    rpert(n = n_sim*length(countries), 
-          min = min(tabela_ou$Casos), 
-          mode = 2,
-          max = 10)
-  #ou <- rpert(n = 1, min = 1, mode = 1.28,max = 6) #Beatriz data
+          mode = 1, #mode of outbreaks, check with table(tabela_ou$Casos)
+          max = 231) #excluding extreme value of max outbreaks in Romenia
   
+  # NO - Number of animals
   simulation_array[ as.character(countries), 'no', ] <- 
     rnorm(n = n_sim*length(countries), 
           mean = imports$mean_animals, 
@@ -112,27 +107,6 @@ generate_array <- function(){
   simulation_array[ as.character(countries), 'to', ] <- 
     simulation_array[ as.character(countries), 'no', ] / imports$so
   
-  # NI - Number of Infected: Outbreaks * herd size * prevalence
-  simulation_array[ as.character(countries), 'NI', ] <- 
-    simulation_array[ as.character(countries), 'ou', ] *
-    simulation_array[ as.character(countries), 'to', ] *
-    simulation_array[ as.character(countries), 'hp', ]
-  
-  # Beta distribution for P2L Beta(α1, α2)
-  #alpha1  = NI + 1
-  simulation_array[ as.character(countries), 'alpha1', ] <- 
-    simulation_array[ as.character(countries), 'NI', ] + 1
-  #alpha2 = no - (NI + 1)
-  simulation_array[ as.character(countries), 'alpha2', ] <- 
-    simulation_array[ as.character(countries), 'no', ] - 
-    simulation_array[ as.character(countries), 'alpha1', ]
-  
-  #P2L
-  simulation_array[ as.character(countries), 'P2L', ] <- 
-    rbeta(n = n_sim*length(countries), 
-          shape1 = simulation_array[ as.character(countries), 'alpha1', ], 
-          shape2 = simulation_array[ as.character(countries), 'alpha2', ])
-  
   ## P3 
   simulation_array[ as.character(countries), 'P3', ] <- 
     rpert(n = n_sim*length(countries), 
@@ -140,16 +114,16 @@ generate_array <- function(){
           mode = 0.633, 
           max = 1)
   
-  ## P4 
+  ## P4 #chance of survival during transit
   simulation_array[ as.character(countries), 'P4', ] <- 
-    rpert(n = n_sim*length(countries), 
-          min=0.0005, 
-          mode=0.0027, 
-          max=0.092)
+    1 - rpert(n = n_sim*length(countries), 
+              min=0.0005, 
+              mode=0.0027, 
+              max=0.092)
   
   
   ## Pus (check needed) ##
-  
+  # Probability of an infected pig pass unreported slaughtering process
   simulation_array[ as.character(countries), 'Pus', ] <- 
     rbeta(n = n_sim*length(countries),
           shape1 = 1.34, 
@@ -164,14 +138,6 @@ generate_array <- function(){
               min = table_psm$min,
               max = table_psm$max)
   
-  ## Pm ##
-  # Probability of an infected pig being slaughtered and used for meat production
-  simulation_array[ as.character(countries), 'Pm', ] <- 
-    simulation_array[ as.character(countries), 'P3', ] *
-    simulation_array[ as.character(countries), 'P4', ] *
-    simulation_array[ as.character(countries), 'Psm', ] *
-    simulation_array[ as.character(countries), 'Pus', ]
-  
   ## Mp ##
   # Average kg meat obtained from pig (in tons)
   simulation_array[ as.character(countries), 'Mp', ] <- 
@@ -181,40 +147,14 @@ generate_array <- function(){
               min = tons_per_pig_estimated$min,
               max = tons_per_pig_estimated$max)
   
-  # Qim
-  # Estimated infected meat produced
-  simulation_array[ as.character(countries), 'Qim', ] <- 
-    simulation_array[ as.character(countries), 'NI', ] *
-    simulation_array[ as.character(countries), 'Pm', ] *
-    simulation_array[ as.character(countries), 'Mp', ]
-  
   ## Nm
   # Total meat production in exporting country
   simulation_array[ as.character(countries), 'Nm', ] <- 
-    rnorm(n = n_sim*length(countries),
-          mean = imports$mean_production,
-          sd = imports$sd_production)
-  
-  ## P2P ##
-  # Beta distribution for P2P Beta(α1p, α2p)
-  #alpha1  = QIM + 1
-  simulation_array[ as.character(countries), 'alpha1p', ] <- 
-    simulation_array[ as.character(countries), 'Qim', ] + 1
-  #alpha2 = NM - (QIM + 1)
-  simulation_array[ as.character(countries), 'alpha2p', ] <- 
-    simulation_array[ as.character(countries), 'Nm', ] - 
-    simulation_array[ as.character(countries), 'alpha1', ]
-  
-  #P2P
-  simulation_array[ as.character(countries), 'P2P', ] <- 
-    rbeta(n = n_sim*length(countries), 
-          shape1 = simulation_array[ as.character(countries), 'alpha1p', ], 
-          shape2 = simulation_array[ as.character(countries), 'alpha2p', ])
-  
-  #PCP
-  simulation_array[ as.character(countries), 'pcP', ] <-
-    simulation_array[ as.character(countries), 'P1', ] *
-    simulation_array[ as.character(countries), 'P2P', ]
+    truncnorm(n = n_sim*length(countries),
+              mean = imports$mean_production,
+              sd = imports$sd_production,
+              min = imports$mean_production - 1*imports$sd_production,
+              max = imports$mean_production + 1*imports$sd_production)
 
   return(simulation_array)
 }
@@ -222,6 +162,12 @@ generate_array <- function(){
 #drop first dimension of the simulation_array [countries]
 X1 <- apply(generate_array(), 2, c)
 X2 <- apply(generate_array(), 2, c)
+#choosing only one country
+# country_id <- as.character(countries[1])
+# X1 <- t(generate_array()[country_id, , ])
+# X2 <- t(generate_array()[country_id, , ])
+
+
 #convert to data frame
 X1 <- as.data.frame(X1)
 X2 <- as.data.frame(X2)
@@ -230,18 +176,26 @@ X2 <- as.data.frame(X2)
 
 #prepare a Sensitivity analysis with Sobol
 # Define the model function
+
 model_function <- function(X) {
+  # NI - Number of Infected: Outbreaks * herd size * prevalence
+  NI <- X$ou * X$to * X$hp
+  # Pm: Probability of an infected pig being slaughtered and used for meat production
   Pm <- X$P3 * X$P4 * X$Psm * X$Pus
-  Qim <- X$NI * Pm * X$Mp
+  # Qim: Estimated infected meat produced
+  Qim <- NI * Pm * X$Mp
   alpha1p <- Qim + 1
   alpha2p <- X$Nm - alpha1p
-  P2P <- rbeta(n = 1, shape1 = alpha1p, shape2 = alpha2p)
-  pcP <- X$P1 * X$P2P
+  # alpha2p[alpha2p <= 0] <- 0.1 #avoid negative values
+  P2P <- rbeta(n = nrow(X), shape1 = alpha1p, shape2 = alpha2p)
+  # P2P <- alpha1p / (alpha1p + alpha2p)
+  pcP <- X$P1 * P2P
   return(pcP)
 }
 
 # Perform Sobol sensitivity analysis
-sobol_result <- sobol2007(model = model_function, X1 = X1, X2 = X2, nboot = 100)
+sobol_result <- sobol2007(model = model_function, X1 = X1, X2 = X2, nboot = 0)
+
 #graphical representation
 ggplot(sobol_result)
 
@@ -300,8 +254,8 @@ df <- as.data.frame.table(simulation_array, responseName = "value") %>%
   pivot_wider(names_from = parameter, values_from = value)
 
 #model
-model_lmer <- lmer(pcP ~  P2P + Qim + Nm + P4 + P3 + ou + to + hp + no + P1 +
-                     (1|country), data = df)
+model_lmer <- lmer(pcP ~ Qim + Nm + P4 + P3 + ou + to + hp + no + P1 +
+                     Pus + Psm + Mp + (1|country), data = df)
 summary(model_lmer)
 
 # Extract model output
@@ -328,4 +282,9 @@ ggplot(tab, aes(x = reorder(Parameter, Est), y = Est)) +
     title = "Fixed effects"
   ) +
   theme_bw(base_size = 14)
+#save graph
+ggsave("results/fixed_effects_products.png", width = 8, height = 6)
+
+#save table
+write.csv(tab, "results/fixed_effects_products.csv", row.names = FALSE)
 

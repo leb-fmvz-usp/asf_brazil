@@ -38,9 +38,12 @@ imports <- imports %>%
   rename(ncL = `2023 - Quilograma Líquido`)
 
 ### simulation parameters ----
-n_sim <- 1000
+n_sim <- 10000
 parameters <- c('P1','hp','ou','no','to','P3','P4')
 countries <- imports$M49
+
+
+
 ### function to generate simulation array ----
 generate_array <- function(){
   simulation_array <- array(data = NA, 
@@ -65,15 +68,10 @@ generate_array <- function(){
   simulation_array[ as.character(countries), 'ou', ] <- 
     rpert(n = n_sim*length(countries), 
           min = min(tabela_ou$Casos), 
-          mode = mean(tabela_ou$Casos),
-          max = max(tabela_ou$Casos))
-  # simulation_array[ as.character(countries), 'ou', ] <- 
-  #   rpert(n = n_sim*length(countries), 
-  #         min = min(tabela_ou$Casos), 
-  #         mode = 2,
-  #         max = 10)
-  #ou <- rpert(n = 1, min = 1, mode = 1.28,max = 6) #Beatriz data
+          mode = 1, #mode of outbreaks, check with table(tabela_ou$Casos)
+          max = 231) #excluding extreme value of max outbreaks in Romenia
   
+  # NO - Number of animals
   simulation_array[ as.character(countries), 'no', ] <- 
     rnorm(n = n_sim*length(countries), 
           mean = imports$mean_animals, 
@@ -92,10 +90,10 @@ generate_array <- function(){
   
   ## P4 
   simulation_array[ as.character(countries), 'P4', ] <- 
-    rpert(n = n_sim*length(countries), 
-          min=0.0005, 
-          mode=0.0027, 
-          max=0.092)
+    1 - rpert(n = n_sim*length(countries), 
+              min=0.0005, 
+              mode=0.0027, 
+              max=0.092)
   return(simulation_array)
 }
 ### preparing data for sensitivity analysis ----
@@ -117,7 +115,8 @@ model_function <- function(X) {
   #alpha2 = no - (NI + 1)
   alpha2 <- X$no - alpha1
   #P2L
-  P2L <- rbeta(n = 1, shape1 = alpha1, shape2 = alpha2)
+  P2L <- rbeta(n = nrow(X), shape1 = alpha1, shape2 = alpha2)
+  #P2L <- alpha1 / (alpha1 + alpha2) #using mean of the distribution 
   pcL <- X$P1 * P2L * X$P3 * X$P4
   return(pcL)
 }
@@ -182,7 +181,7 @@ df <- as.data.frame.table(simulation_array, responseName = "value") %>%
   pivot_wider(names_from = parameter, values_from = value)
 
 #model
-model_lmer <- lmer(prL ~  P4 + P3 + ou + to + hp + no + P1 + (1|country), data = df)
+model_lmer <- lmer(pcL ~  P4 + P3 + ou + to + hp + no + P1 + (1|country), data = df)
 summary(model_lmer)
 
 # Extract model output
@@ -197,6 +196,9 @@ tab <- as.data.frame(s$coefficients) %>%
     Lower = Est - 1.96 * SE,
     Upper = Est + 1.96 * SE
   )
+#export table
+write.csv(tab, "results/fixed_effects_live_animals.csv", row.names = FALSE)
+
 
 # Graph
 ggplot(tab, aes(x = reorder(Parameter, Est), y = Est)) +
@@ -208,5 +210,8 @@ ggplot(tab, aes(x = reorder(Parameter, Est), y = Est)) +
     y = "Coefficient (± 1.96 * SE)",
     title = "Fixed effects"
   ) +
-  theme_bw(base_size = 14)
+  theme_bw(base_size = 14) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray")
+# save plot in results
 
+ggsave("results/fixed_effects_live_animals.png", width = 8, height = 6)
